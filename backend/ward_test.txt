@@ -1,0 +1,36 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.8, pytest-8.0.2, pluggy-1.6.0 -- C:\Users\ASUS\AppData\Local\Programs\Python\Python311\python.exe
+cachedir: .pytest_cache
+rootdir: D:\ps-crm\backend
+configfile: pytest.ini
+plugins: anyio-4.12.0, dash-2.14.0, Faker-40.1.2, langsmith-0.4.56, asyncio-0.23.6, base-url-2.1.0, cov-4.1.0, playwright-0.7.0
+asyncio: mode=Mode.AUTO
+collecting ... collected 73 items / 72 deselected / 1 selected
+
+test123.py::TestPerformance::test_wards_endpoint_under_300ms FAILED      [100%]
+
+================================== FAILURES ===================================
+_______________ TestPerformance.test_wards_endpoint_under_300ms _______________
+
+self = <test123.TestPerformance object at 0x000002C367AE9810>
+
+    def test_wards_endpoint_under_300ms(self):
+        """Ward GeoJSON should be fast (cached)"""
+        import time
+        times = []
+        with client() as c:
+            # First request warms cache
+            c.get("/api/v1/wards")
+            for _ in range(10):
+                start = time.time()
+                c.get("/api/v1/wards")
+                times.append((time.time() - start) * 1000)
+        p95 = sorted(times)[int(len(times) * 0.95) - 1]
+>       assert p95 < 500, f"Wards endpoint p95: {p95:.0f}ms"
+E       AssertionError: Wards endpoint p95: 782ms
+E       assert 782.207727432251 < 500
+
+test123.py:1117: AssertionError
+=========================== short test summary info ===========================
+FAILED test123.py::TestPerformance::test_wards_endpoint_under_300ms - Asserti...
+====================== 1 failed, 72 deselected in 16.14s ======================
