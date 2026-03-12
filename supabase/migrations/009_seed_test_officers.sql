@@ -34,19 +34,13 @@ VALUES
         '{}'::uuid[],
         true
     ),
-    (
-        'f8094e08-15ab-4157-9c1b-3316a9e14a3c',
-        'Test Contractor Officer',
-        'test.contractor@pscrm-test.dev',
-        'contractor',
-        NULL,
-        '{}'::uuid[],
-        true
-    )
 ON CONFLICT (id) DO UPDATE SET
     role     = EXCLUDED.role,
     ward_ids = EXCLUDED.ward_ids,
     active   = EXCLUDED.active;
+
+-- NOTE: Contractor users go in the "contractors" table, NOT "officers".
+-- The officers table CHECK constraint only allows: jssa, aa, faa, super_admin.
 
 -- Also ensure a contractors row exists for the contractor test user
 INSERT INTO contractors (id, name, contact_email, active)
