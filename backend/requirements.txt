@@ -1,0 +1,35 @@
+# ── Web framework ─────────────────────────────────────────────────────
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+python-multipart==0.0.12
+
+# ── Data validation ───────────────────────────────────────────────────
+pydantic[email]==2.10.3
+pydantic-settings==2.6.1
+email-validator==2.2.0
+
+# ── Supabase / async DB ───────────────────────────────────────────────
+supabase==2.3.4
+httpx==0.27.2
+
+# ── Email ─────────────────────────────────────────────────────────────
+aiosmtplib==3.0.2
+
+# ── Telegram bot ──────────────────────────────────────────────────────
+python-telegram-bot==21.8
+
+# ── Google Gemini ─────────────────────────────────────────────────────
+google-generativeai==0.8.3
+
+# ── LangGraph (Supervisor / Agentic workflow) ─────────────────────────
+langgraph==0.2.60
+langchain-core==0.3.25
+
+# ── Spatial ML — Predictive Agent ────────────────────────────────────
+scikit-learn==1.6.0
+numpy==2.1.3
+
+# ── Testing ───────────────────────────────────────────────────────────
+pytest==8.3.4
+pytest-asyncio==0.24.0
+httpx==0.27.2

@@ -1,0 +1,64 @@
+{
+  "drainage": {
+    "keywords": [
+      "drain", "sewer", "waterlogging", "nala", "overflow", "flooding",
+      "clogged drain", "blocked drain", "sewage", "gutter", "manhole",
+      "flood", "stagnant water", "nali", "naala", "pani bhar", "jal bharav"
+    ],
+    "department": "Sanitation Department",
+    "asset_type": "drain"
+  },
+  "streetlight": {
+    "keywords": [
+      "streetlight", "street light", "lamp post", "electric pole", "light out",
+      "dark road", "no light", "light not working", "bulb", "lamp", "pole",
+      "bijli nahi", "andhere", "light band", "public light", "road light"
+    ],
+    "department": "Electricity Department",
+    "asset_type": "pole"
+  },
+  "road": {
+    "keywords": [
+      "pothole", "road", "broken road", "damaged road", "crack", "road repair",
+      "pavement", "footpath", "road hole", "road damage", "roadwork", "speed breaker",
+      "gutter road", "khadda", "sadak", "road broken", "road patching"
+    ],
+    "department": "Public Works Department",
+    "asset_type": "road_segment"
+  },
+  "tree": {
+    "keywords": [
+      "tree", "fallen tree", "tree cutting", "branch", "overgrown", "branches",
+      "horticulture", "park", "garden", "tree fallen", "dead tree", "ped",
+      "twig", "uprooted tree", "tree blocking", "broken branch", "ped gira"
+    ],
+    "department": "Horticulture Department",
+    "asset_type": "tree"
+  },
+  "garbage": {
+    "keywords": [
+      "garbage", "trash", "waste", "rubbish", "litter", "dump", "filth",
+      "dirty", "sweeping", "sanitation", "bin", "dustbin", "cleaning",
+      "kachra", "safai", "gandagi", "waste pile", "overflowing bin", "fly tipping"
+    ],
+    "department": "Sanitation Department",
+    "asset_type": "garbage_point"
+  },
+  "water_supply": {
+    "keywords": [
+      "water", "water supply", "pipeline", "water pipe", "no water", "water leak",
+      "burst pipe", "water main", "water shortage", "tap", "drinking water",
+      "pani nahi", "paani nahi", "pani ki samasya", "water cut", "low pressure",
+      "contaminated water", "dirty water", "water tanker"
+    ],
+    "department": "Delhi Jal Board",
+    "asset_type": "water_main"
+  },
+  "other": {
+    "keywords": [
+      "other", "miscellaneous", "general issue", "complaint", "problem"
+    ],
+    "department": "Public Works Department",
+    "asset_type": "road_segment"
+  }
+}

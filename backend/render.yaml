@@ -1,0 +1,83 @@
+# render.yaml — Render.com IaC blueprint
+# Defines:
+#   1. A Web Service running the FastAPI app
+#   2. A Cron Job that calls the predictive agent every night at 02:00 IST (20:30 UTC)
+
+services:
+  # ── Web Service ─────────────────────────────────────────────────────
+  - type: web
+    name: ps-crm-backend
+    runtime: python
+    region: singapore        # closest Render region to India
+    plan: starter
+
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
+    healthCheckPath: /health
+
+    envVars:
+      - key: SUPABASE_URL
+        sync: false          # set manually in Render dashboard
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: BHASHINI_USER_ID
+        sync: false
+      - key: BHASHINI_API_KEY
+        sync: false
+      - key: BHASHINI_PIPELINE_ID
+        sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: BACKEND_URL
+        sync: false           # e.g. https://ps-crm-backend.onrender.com
+      - key: INTERNAL_CRON_KEY
+        sync: false
+
+  # ── Cron Job — Predictive Agent ─────────────────────────────────────
+  # Runs every night at 20:30 UTC = 02:00 IST
+  - type: cron
+    name: ps-crm-predictive-agent
+    runtime: python
+    region: singapore
+    plan: starter
+
+    schedule: "30 20 * * *"
+
+    # Render Cron Jobs need a command; we send a simple HTTP POST to the web service.
+    buildCommand: pip install httpx
+    command: >
+      python -c "
+      import httpx, os, sys;
+      r = httpx.post(
+          os.environ['BACKEND_URL'] + '/internal/run-predictive-agent',
+          headers={'x-internal-key': os.environ['INTERNAL_CRON_KEY']},
+          timeout=30
+      );
+      print(r.status_code, r.text);
+      sys.exit(0 if r.is_success else 1)
+      "
+
+    envVars:
+      - key: BACKEND_URL
+        sync: false
+      - key: INTERNAL_CRON_KEY
+        sync: false
