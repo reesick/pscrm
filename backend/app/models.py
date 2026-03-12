@@ -1,4 +1,4 @@
-from pydantic import BaseModel, UUID4, EmailStr
+from pydantic import BaseModel, UUID4, EmailStr, field_validator
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
@@ -49,6 +49,20 @@ class ComplaintCreateRequest(BaseModel):
     lng: float
     media_urls: List[str] = []
     channel: Channel
+
+    @field_validator("lat")
+    @classmethod
+    def validate_lat(cls, v: float) -> float:
+        if v < -90 or v > 90:
+            raise ValueError("Latitude must be between -90 and 90")
+        return v
+
+    @field_validator("lng")
+    @classmethod
+    def validate_lng(cls, v: float) -> float:
+        if v < -180 or v > 180:
+            raise ValueError("Longitude must be between -180 and 180")
+        return v
 
 
 class ComplaintStatusUpdateRequest(BaseModel):

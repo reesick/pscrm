@@ -135,12 +135,20 @@ async def assign_ward(lat: float, lng: float) -> Optional[str]:
 
 # ── Auth helpers ──────────────────────────────────────────────────────
 
+import time as _time
+
+# ── Auth cache — avoids repeated Supabase auth + officer lookups ──────
+_auth_cache: dict[str, tuple[CurrentUser, float]] = {}
+_AUTH_CACHE_TTL = 30  # seconds
+
+
 async def get_current_user(
     authorization: Optional[str] = Header(default=None),
 ) -> CurrentUser:
     """
     Validates the Bearer JWT from the Authorization header.
     Supabase verifies it; we extract role + ward from user metadata.
+    Results are cached for 30 seconds to improve p95 latency.
     """
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
@@ -148,12 +156,22 @@ async def get_current_user(
             detail="Missing or invalid Authorization header",
         )
     token = authorization.split(" ", 1)[1]
+
+    # Check auth cache first
+    cached = _auth_cache.get(token)
+    if cached:
+        user_obj, cached_at = cached
+        if _time.time() - cached_at < _AUTH_CACHE_TTL:
+            return user_obj
+
     sb = await get_supabase()
     try:
         user_response = await sb.auth.get_user(token)
         user = user_response.user
         if not user:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token validation failed")
 
@@ -168,17 +186,26 @@ async def get_current_user(
         ward_id = ward_ids[0] if ward_ids else None
         zone_ward_ids = ward_ids
     else:
-        role = metadata.get("role") or app_meta.get("role", "jssa")
-        ward_id = metadata.get("ward_id")
-        zone_ward_ids = metadata.get("zone_ward_ids", [])
+        # Check if user is a contractor
+        contractor_result = await sb.table("contractors").select("id").eq("id", user.id).maybe_single().execute()
+        if contractor_result and contractor_result.data:
+            role = "contractor"
+            ward_id = None
+            zone_ward_ids = []
+        else:
+            role = metadata.get("role") or app_meta.get("role", "jssa")
+            ward_id = metadata.get("ward_id")
+            zone_ward_ids = metadata.get("zone_ward_ids", [])
 
-    return CurrentUser(
+    result = CurrentUser(
         id=user.id,
         role=role,
         ward_id=ward_id,
         zone_ward_ids=zone_ward_ids,
         email=user.email,
     )
+    _auth_cache[token] = (result, _time.time())
+    return result
 
 
 def require_role(*allowed_roles: str):

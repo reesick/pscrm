@@ -35,16 +35,20 @@ function ProofUploader({ onUploaded }: { onUploaded: (url: string) => void }) {
   );
 }
 
-export function ComplaintDetailPanel({ complaintId, onClose, onStatusUpdate }: { complaintId: string, onClose: () => void, onStatusUpdate: any }) {
-  const [complaint, setComplaint] = useState<any>(null);
+export function ComplaintDetailPanel({ complaintId, onClose, onStatusUpdate, initialData }: { complaintId: string, onClose: () => void, onStatusUpdate: any, initialData?: any }) {
+  const [complaint, setComplaint] = useState<any>(initialData || null);
   const [nextStatus, setNextStatus] = useState("");
   const [proofUrl,   setProofUrl]   = useState("");
   const [note,       setNote]       = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    api.complaints.get(complaintId).then(setComplaint).catch(console.error);
-  }, [complaintId]);
+    if (!initialData) {
+      api.complaints.get(complaintId).then(setComplaint).catch(console.error);
+    } else {
+      setComplaint(initialData);
+    }
+  }, [complaintId, initialData]);
 
   if (!complaint) return (
     <Sheet open onOpenChange={onClose}>

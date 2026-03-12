@@ -69,7 +69,12 @@ async def get_sla_compliance(
         "from_date": date_from,
         "to_date":   date_to,
     }).execute()
-    return result.data or []
+    rows = result.data or []
+    # Guard against NULL compliance_pct from SQL NULLIF
+    for row in rows:
+        if row.get("compliance_pct") is None:
+            row["compliance_pct"] = 0.0
+    return rows
 
 
 # ── GET /analytics/complaint-volume ──────────────────────────────────

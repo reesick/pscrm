@@ -118,16 +118,7 @@ export default function AADashboard() {
         )}
 
         {tab === "officers" && (
-          <div className="max-w-4xl mx-auto py-6 px-4">
-              <div className="bg-white rounded border border-gray-200 p-6">
-              <h2 className="font-semibold text-gray-900 mb-2">Officer Performance</h2>
-              <p className="text-sm text-gray-500 mb-4">
-                Select an officer to view their stats. Individual officer IDs must be provided — a
-                bulk officer-list endpoint is on the backend roadmap.
-              </p>
-              <EmptyState icon="📊" message="Officer stats are available via /officers/{id}/stats. A bulk officer list endpoint will be added in the next sprint." />
-            </div>
-          </div>
+          <OfficerPerformanceTab />
         )}
       </div>
 
@@ -136,9 +127,92 @@ export default function AADashboard() {
           complaintId={selectedId}
           onClose={() => setSelectedId(null)}
           onStatusUpdate={handleStatusUpdate}
+          initialData={escalations.find(c => c.grievance_id === selectedId)}
         />
       )}
     </div>
   );
 }
 
+function OfficerPerformanceTab() {
+  const [officerId, setOfficerId] = useState("");
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleLookup() {
+    if (!officerId.trim()) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res = await api.officers.stats(officerId.trim());
+      setStats(res);
+    } catch (err: any) {
+      setError(err.message || "Officer not found");
+      setStats(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto py-6 px-4 space-y-4">
+      <div className="bg-white rounded border border-gray-200 p-6 space-y-4">
+        <h2 className="font-semibold text-gray-900">Officer Performance Lookup</h2>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={officerId}
+            onChange={e => setOfficerId(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleLookup()}
+            placeholder="Enter Officer UUID"
+            className="flex-1 border border-gray-200 rounded-md p-2 text-sm font-mono focus:ring-2 focus:ring-blue-700 focus:outline-none"
+          />
+          <button
+            onClick={handleLookup}
+            disabled={loading || !officerId.trim()}
+            className="bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-md hover:bg-blue-800 disabled:opacity-50 transition-colors"
+          >
+            {loading ? "Loading..." : "Look Up"}
+          </button>
+        </div>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+      </div>
+
+      {stats && (
+        <div className="bg-white rounded border border-gray-200 p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <div>
+              <h3 className="font-bold text-gray-900 text-lg">{stats.name}</h3>
+              <p className="text-xs text-gray-500 capitalize">{stats.role}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            {[
+              { label: "Total Assigned", value: stats.total_assigned, color: "text-blue-700" },
+              { label: "Total Resolved", value: stats.total_resolved, color: "text-green-700" },
+              { label: "Total Escalated", value: stats.total_escalated, color: "text-red-600" },
+              { label: "Avg Resolution", value: stats.avg_resolution_hours + "h", color: "text-amber-700" },
+            ].map((s, i) => (
+              <div key={i} className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                <p className="text-xs text-gray-500 font-medium">{s.label}</p>
+                <p className={`text-2xl font-bold mt-1 ${s.color}`}>{s.value}</p>
+              </div>
+            ))}
+          </div>
+          <div className={`text-center py-3 rounded-lg border-2 ${
+            stats.reopen_rate_pct < 10 ? "bg-green-50 border-green-200" :
+            stats.reopen_rate_pct < 25 ? "bg-amber-50 border-amber-200" :
+            "bg-red-50 border-red-200"
+          }`}>
+            <p className="text-xs font-semibold text-gray-600">Reopen Rate</p>
+            <p className={`text-3xl font-bold ${
+              stats.reopen_rate_pct < 10 ? "text-green-700" :
+              stats.reopen_rate_pct < 25 ? "text-amber-700" : "text-red-700"
+            }`}>{stats.reopen_rate_pct}%</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

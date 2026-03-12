@@ -51,13 +51,16 @@ export default function SuperAdminDashboard() {
       const maplibregl = mod.default;
       hotspots.forEach((h: any) => {
         if (!h.lat || !h.lng) return;
+        const lat = Number(h.lat);
+        const lng = Number(h.lng);
+        if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
         const size = Math.max(24, Math.min(80, h.radius_m / 5));
         const color = HOTSPOT_COLORS[(h.severity ?? 1) - 1] ?? HOTSPOT_COLORS[2];
         const el = document.createElement('div');
         el.style.cssText = `width:${size}px;height:${size}px;border-radius:50%;background:${color};opacity:0.75;border:2px solid white;cursor:pointer;display:flex;align-items:center;justify-content:center;color:white;font-size:10px;font-weight:700;`;
         el.textContent = String(h.complaint_count);
         new maplibregl.Marker({ element: el })
-          .setLngLat([h.lng, h.lat])
+          .setLngLat([lng, lat])
           .setPopup(
             new maplibregl.Popup({ offset: 10 }).setHTML(
               `<div style="font-size:13px;line-height:1.5">

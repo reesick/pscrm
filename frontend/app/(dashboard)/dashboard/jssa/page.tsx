@@ -96,6 +96,10 @@ export default function JSSADashboard() {
 
       complaints.forEach(c => {
         if (!c.lat || !c.lng) return;
+        // Validate coordinates are in valid ranges
+        const lat = Number(c.lat);
+        const lng = Number(c.lng);
+        if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return;
         const color = getPinColor(c.urgency || 2, c.sla_deadline);
         const el = document.createElement('div');
         el.className = 'w-4 h-4 rounded-full border-2 border-white shadow cursor-pointer hover:scale-125 transition-transform duration-200';
@@ -103,7 +107,7 @@ export default function JSSADashboard() {
         el.addEventListener('click', () => setSelectedId(c.grievance_id));
 
         const marker = new mapLib.current.Marker({ element: el })
-          .setLngLat([c.lng, c.lat])
+          .setLngLat([lng, lat])
           .addTo(map.current!);
         markers.current[c.grievance_id] = marker;
       });
@@ -162,8 +166,9 @@ export default function JSSADashboard() {
                       pinColor={getPinColor(c.urgency || 2, c.sla_deadline)}
                       onClick={() => {
                         setSelectedId(c.grievance_id);
-                        if (c.lat && c.lng && map.current) {
-                          map.current.flyTo({ center: [c.lng, c.lat], zoom: 15, duration: 800 });
+                        const lat = Number(c.lat), lng = Number(c.lng);
+                        if (map.current && !isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                          map.current.flyTo({ center: [lng, lat], zoom: 15, duration: 800 });
                         }
                       }}
                     />
@@ -179,6 +184,7 @@ export default function JSSADashboard() {
           complaintId={selectedId}
           onClose={() => setSelectedId(null)}
           onStatusUpdate={handleStatusUpdate}
+          initialData={complaints.find(c => c.grievance_id === selectedId)}
         />
       )}
     </div>

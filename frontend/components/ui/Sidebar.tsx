@@ -1,10 +1,17 @@
 "use client";
 import Link from 'next/link';
 import React from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 
 export function Sidebar({ navItems = [], role = 'user', user }: { navItems: any[], role: string, user: any }) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.push('/login');
+  }
 
   return (
     <aside className="w-60 bg-[#F9FAFB] border-r border-gray-200 h-full flex flex-col shrink-0">
@@ -39,7 +46,7 @@ export function Sidebar({ navItems = [], role = 'user', user }: { navItems: any[
       </nav>
 
       {/* User footer */}
-      <div className="px-4 py-4 border-t border-gray-200 text-sm">
+      <div className="px-4 py-4 border-t border-gray-200 text-sm space-y-3">
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold shrink-0 uppercase">
             {user?.user_metadata?.name?.[0] || user?.email?.[0] || 'U'}
@@ -49,6 +56,12 @@ export function Sidebar({ navItems = [], role = 'user', user }: { navItems: any[
             <p className="text-gray-500 capitalize text-xs">{role}</p>
           </div>
         </div>
+        <button
+          onClick={handleLogout}
+          className="w-full text-left text-xs text-red-600 hover:text-red-700 font-medium px-1 py-1 rounded hover:bg-red-50 transition-colors"
+        >
+          Sign Out
+        </button>
       </div>
     </aside>
   );

@@ -100,6 +100,7 @@ export default function FAADashboard() {
           complaintId={selectedId}
           onClose={() => setSelectedId(null)}
           onStatusUpdate={handleStatusUpdate}
+          initialData={escalations.find(c => c.grievance_id === selectedId)}
         />
       )}
     </div>

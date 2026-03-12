@@ -22,7 +22,12 @@ from app.models import (
 from app.services import send_email, notify
 from app.utils import log_event
 
+import json as _json
+
 router = APIRouter(tags=["admin"])
+
+# ── In-memory ward GeoJSON cache ──────────────────────────────────────
+_ward_cache: dict = {"data": None}
 
 
 # ── GET /officers/{id}/stats — Officer performance ────────────────────
@@ -35,7 +40,10 @@ async def get_officer_stats(
 ):
     """All metrics computed from complaint_events — no denormalized counters."""
     # Verify officer exists
-    officer_row = await sb.table("officers").select("id, name, role").eq("id", officer_id).maybe_single().execute()
+    try:
+        officer_row = await sb.table("officers").select("id, name, role").eq("id", officer_id).maybe_single().execute()
+    except Exception:
+        raise HTTPException(status_code=404, detail="Officer not found")
     if not officer_row or not officer_row.data:
         raise HTTPException(status_code=404, detail="Officer not found")
 
@@ -267,9 +275,11 @@ async def get_wards(sb=Depends(get_supabase)):
     Returns GeoJSON FeatureCollection — MapLibre renders this as boundary overlays.
     Aggressively cached: ward boundaries change only when MCD redraws them (rare).
     """
-    result = await sb.rpc("get_wards_geojson", {}).execute()
+    if _ward_cache["data"] is None:
+        result = await sb.rpc("get_wards_geojson", {}).execute()
+        _ward_cache["data"] = result.data
     return Response(
-        content=result.data,
+        content=_ward_cache["data"],
         media_type="application/json",
         headers={"Cache-Control": "max-age=86400"},
     )

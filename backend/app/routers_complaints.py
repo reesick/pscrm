@@ -37,10 +37,44 @@ from app.utils import (
     validate_transition,
 )
 
+import struct
+import re
+
 router = APIRouter(tags=["complaints"])
 
 
 # ── Helpers ───────────────────────────────────────────────────────────
+
+def _extract_lat_lng(row: dict) -> tuple[float | None, float | None]:
+    """Extract lat/lng from PostGIS location column (hex EWKB, hex WKB, or WKT)."""
+    loc = row.get("location")
+    if not loc:
+        return None, None
+    lat_out, lng_out = None, None
+    if isinstance(loc, str):
+        # Try WKT: SRID=4326;POINT(lng lat) or POINT(lng lat)
+        m = re.search(r'POINT\s*\(\s*([\-\d.]+)\s+([\-\d.]+)\s*\)', loc, re.IGNORECASE)
+        if m:
+            lng_out, lat_out = float(m.group(1)), float(m.group(2))
+        # Try hex WKB/EWKB (at least 42 hex chars for a 2D point)
+        elif len(loc) >= 42 and all(c in '0123456789abcdefABCDEF' for c in loc):
+            try:
+                raw = bytes.fromhex(loc)
+                # Determine byte order: 00=big-endian, 01=little-endian
+                bo = '<' if raw[0] == 1 else '>'
+                wkb_type = struct.unpack_from(f'{bo}I', raw, 1)[0]
+                # EWKB type for Point with SRID: 0x20000001
+                offset = 5
+                if wkb_type & 0x20000000:  # has SRID flag
+                    offset = 9  # skip 4 bytes SRID
+                lng_out, lat_out = struct.unpack_from(f'{bo}dd', raw, offset)
+            except (struct.error, ValueError, IndexError):
+                pass
+    # Validate extracted coordinates
+    if lat_out is not None and lng_out is not None:
+        if -90 <= lat_out <= 90 and -180 <= lng_out <= 180:
+            return lat_out, lng_out
+    return None, None
 
 def _build_public_response(row: dict) -> ComplaintPublicResponse:
     events = row.get("complaint_events", [])
@@ -85,6 +119,8 @@ def _build_admin_response(row: dict) -> ComplaintAdminResponse:
         if e.get("payload", {}).get("note")
     ]
 
+    lat, lng = _extract_lat_lng(row)
+
     return ComplaintAdminResponse(
         **base.model_dump(),
         ward_id=row.get("ward_id"),
@@ -95,8 +131,8 @@ def _build_admin_response(row: dict) -> ComplaintAdminResponse:
         asset_ids=row.get("asset_ids", []),
         classification_confidence=row.get("classification_confidence"),
         llm_used=row.get("llm_used", False),
-        lat=row.get("lat"),
-        lng=row.get("lng"),
+        lat=lat,
+        lng=lng,
     )
 
 
@@ -229,6 +265,10 @@ async def list_complaints(
     sb=Depends(get_supabase),
 ):
     """Admin complaint list. JWT required. Data is scoped to the caller's role."""
+    # Contractors have no access to the complaint list
+    if current_user.role == "contractor":
+        raise HTTPException(status_code=403, detail="Contractors cannot access complaint list")
+
     query = sb.table("complaints").select(
         "*, complaint_departments(*, departments(name), officers(name)), complaint_events(*)"
     )
@@ -253,6 +293,7 @@ async def list_complaints(
     result = await query \
         .order("urgency", desc=True) \
         .order("created_at", desc=True) \
+        .limit(200) \
         .execute()
 
     return [_build_admin_response(r) for r in (result.data or [])]
@@ -271,19 +312,30 @@ async def update_status(
     Updates complaint status. Validates the state machine transition.
     Proof photo URL is required for IN_PROGRESS and FINAL_SURVEY_PENDING.
     """
-    complaint = await sb.table("complaints") \
-        .select("status, ward_id") \
-        .eq("id", complaint_id) \
-        .maybe_single() \
-        .execute()
+    # Resolve UUID or grievance_id
+    try:
+        complaint = await sb.table("complaints") \
+            .select("id, status, ward_id") \
+            .eq("id", complaint_id) \
+            .maybe_single() \
+            .execute()
+    except Exception:
+        complaint = await sb.table("complaints") \
+            .select("id, status, ward_id") \
+            .eq("grievance_id", complaint_id.upper()) \
+            .maybe_single() \
+            .execute()
 
     if not complaint or not complaint.data:
         raise HTTPException(status_code=404, detail="Complaint not found")
 
+    # Use the actual UUID for all subsequent DB operations
+    resolved_id = complaint.data["id"]
+
     current_status = complaint.data["status"]
 
-    # Enforce ward scoping for JSSA
-    if current_user.role == "jssa" and complaint.data.get("ward_id") != current_user.ward_id:
+    # Enforce ward scoping for JSSA (skip if complaint has no ward yet — assigned async by agent)
+    if current_user.role == "jssa" and complaint.data.get("ward_id") and complaint.data["ward_id"] != current_user.ward_id:
         raise HTTPException(status_code=403, detail="Complaint is not in your ward")
 
     # State machine check
@@ -304,12 +356,12 @@ async def update_status(
     # Update complaint
     await sb.table("complaints") \
         .update({"status": body.new_status.value}) \
-        .eq("id", complaint_id) \
+        .eq("id", resolved_id) \
         .execute()
 
     # Append to audit log (this DB write triggers Supabase Realtime → frontend updates)
     await log_event(
-        complaint_id,
+        resolved_id,
         event_type="status_change",
         actor_type="officer",
         actor_id=current_user.id,
@@ -321,7 +373,7 @@ async def update_status(
         },
     )
 
-    return {"ok": True, "complaint_id": complaint_id, "new_status": body.new_status.value}
+    return {"ok": True, "complaint_id": resolved_id, "new_status": body.new_status.value}
 
 
 # ── POST /complaints/{id}/survey-response — Record citizen survey ──────
@@ -333,14 +385,24 @@ async def record_survey_response(
     sb=Depends(get_supabase),
 ):
     """Records citizen survey result. Called internally by Survey Agent."""
-    complaint = await sb.table("complaints") \
-        .select("status, grievance_id, ward_id") \
-        .eq("id", complaint_id) \
-        .maybe_single() \
-        .execute()
+    # Resolve UUID or grievance_id
+    try:
+        complaint = await sb.table("complaints") \
+            .select("id, status, grievance_id, ward_id") \
+            .eq("id", complaint_id) \
+            .maybe_single() \
+            .execute()
+    except Exception:
+        complaint = await sb.table("complaints") \
+            .select("id, status, grievance_id, ward_id") \
+            .eq("grievance_id", complaint_id.upper()) \
+            .maybe_single() \
+            .execute()
 
     if not complaint or not complaint.data:
         raise HTTPException(status_code=404, detail="Complaint not found")
+
+    resolved_id = complaint.data["id"]
 
     if complaint.data["status"] != "FINAL_SURVEY_PENDING":
         raise HTTPException(
@@ -357,11 +419,11 @@ async def record_survey_response(
 
     await sb.table("complaints") \
         .update({"status": new_status}) \
-        .eq("id", complaint_id) \
+        .eq("id", resolved_id) \
         .execute()
 
     await log_event(
-        complaint_id,
+        resolved_id,
         event_type="survey_response",
         actor_type="citizen",
         from_status="FINAL_SURVEY_PENDING",
@@ -388,6 +450,7 @@ async def get_upload_url(
     result = await sb.storage.from_("complaint-proofs").create_signed_upload_url(filename)
     return {
         "upload_url":  result.get("signedURL"),
+        "file_path":   filename,
         "path":        filename,
         "public_url":  f"{sb.storage_url}/object/public/complaint-proofs/{filename}",
     }
